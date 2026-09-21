@@ -46,7 +46,10 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
-                    NavHost(navController = navController, startDestination = "basic_info") {
+                    NavHost(navController = navController, startDestination = "daftar_produk") {
+                        composable("daftar_produk") {
+                            com.pemmob.haydar.ui.screen.DaftarProdukScreen()
+                        }
                         composable("basic_info") {
                             BasicInfoScreen(
                                 onNavigateToContact = { navController.navigate(route = "form_screen") }
