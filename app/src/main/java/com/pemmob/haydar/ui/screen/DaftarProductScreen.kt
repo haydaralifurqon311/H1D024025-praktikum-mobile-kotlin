@@ -1,7 +1,5 @@
 package com.pemmob.haydar.ui.screen
 
-import android.content.res.Configuration
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,8 +21,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,7 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,61 +48,94 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
 import com.pemmob.haydar.R
-import com.pemmob.haydar.data.dummy.DummyData
 import com.pemmob.haydar.data.model.Category
 import com.pemmob.haydar.data.model.Product
 import com.pemmob.haydar.ui.theme.JualanTheme
-import kotlinx.coroutines.delay
+import com.pemmob.haydar.ui.viewmodel.ProductUiState
+import com.pemmob.haydar.ui.viewmodel.ProductViewModel
+import com.pemmob.haydar.util.JualanConstants
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DaftarProdukScreen(navController: NavController? = null) {
-    var selectedCategoryId by rememberSaveable { mutableStateOf(DummyData.categories.firstOrNull()?.id) }
+fun DaftarProdukScreen(
+    navController: NavController? = null,
+    viewModel: ProductViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var selectedCategoryId by rememberSaveable { mutableStateOf<Int?>(null) }
     var searchQuery by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    var filteredProducts by remember { mutableStateOf(emptyList<Product>()) }
 
-    LaunchedEffect(selectedCategoryId, searchQuery) {
-        isLoading = true
-        delay(1000)
-
-        val filteredByCategory = if (selectedCategoryId != null) {
-            DummyData.products.filter { it.category_id == selectedCategoryId }
-        } else {
-            DummyData.products
+    when (val state = uiState) {
+        is ProductUiState.Loading -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Mencari data...")
+                }
+            }
         }
-
-        filteredProducts = if (searchQuery.isBlank()) {
-            filteredByCategory
-        } else {
-            filteredByCategory.filter { it.name.contains(searchQuery, ignoreCase = true) }
+        is ProductUiState.Error -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Error: ${state.message}", color = MaterialTheme.colorScheme.error)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = { viewModel.fetchData() }) {
+                        Text("Coba Lagi")
+                    }
+                }
+            }
         }
-        isLoading = false
+        is ProductUiState.Success -> {
+            val categories = state.categories
+            val products = state.products
+
+            val effectiveCategoryId = selectedCategoryId ?: categories.firstOrNull()?.id
+
+            val filteredByCategory = if (effectiveCategoryId != null) {
+                products.filter { it.category_id == effectiveCategoryId }
+            } else {
+                products
+            }
+
+            val filteredProducts = if (searchQuery.isBlank()) {
+                filteredByCategory
+            } else {
+                filteredByCategory.filter { it.name.contains(searchQuery, ignoreCase = true) }
+            }
+
+            StatelessDaftarProduct(
+                categories = categories,
+                selectedCategoryId = effectiveCategoryId,
+                onCategorySelected = { selectedCategoryId = it },
+                searchQuery = searchQuery,
+                onSearchQueryChange = { searchQuery = it },
+                isLoading = false,
+                products = filteredProducts,
+                onProductClick = { product ->
+                    navController?.navigate(route = "detail/${product.id}")
+                },
+                onContactUsClick = {
+                    navController?.navigate(route = "hubungi_kami")
+                }
+            )
+        }
     }
-
-    StatelessDaftarProduct(
-        categories = DummyData.categories,
-        selectedCategoryId = selectedCategoryId,
-        onCategorySelected = { selectedCategoryId = it },
-        searchQuery = searchQuery,
-        onSearchQueryChange = { searchQuery = it },
-        isLoading = isLoading,
-        products = filteredProducts,
-        onProductClick = { product ->
-            navController?.navigate(route = "detail/${product.id}")
-        },
-        onContactUsClick = {
-            navController?.navigate(route = "hubungi_kami")
-        }
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -247,7 +280,6 @@ fun StatelessDaftarProduct(
 
 @Composable
 fun ProductItemCard(product: Product, onClick: () -> Unit) {
-    val context = LocalContext.current
     Card(
         modifier = Modifier
             .padding(8.dp)
@@ -257,17 +289,20 @@ fun ProductItemCard(product: Product, onClick: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            val imageRes = remember(product.img) {
-                val resId = context.resources.getIdentifier(product.img, "drawable", context.packageName)
-                if (resId != 0) resId else R.drawable.ic_launcher_background
+            val imageUrl = if (product.img == "dummy_product") {
+                null
+            } else {
+                "${JualanConstants.BASE_URL}img/${product.img}"
             }
 
             Box(
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Image(
-                    painter = painterResource(id = imageRes),
+                AsyncImage(
+                    model = imageUrl ?: R.drawable.dummy_product,
                     contentDescription = product.name,
+                    placeholder = painterResource(id = R.drawable.dummy_product),
+                    error = painterResource(id = R.drawable.dummy_product),
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
@@ -340,36 +375,25 @@ fun CategoryItem(category: Category, isSelected: Boolean, onClick: () -> Unit) {
 @Preview(showBackground = true)
 @Composable
 fun PreviewProduct() {
-    ProductItemCard(product = DummyData.products[0], onClick = {})
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewCategory() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        CategoryItem(
-            category = DummyData.categories[0],
-            isSelected = true,
-            onClick = {}
-        )
-    }
+    ProductItemCard(
+        product = Product(
+            id = 1,
+            category_id = 1,
+            category = Category(1, "Makanan", "Desc", 5),
+            name = "Kripik Singkong",
+            description = "Enak",
+            price = 15000.0,
+            stock = 10,
+            img = "dummy_product"
+        ),
+        onClick = {}
+    )
 }
 
 @Preview(showBackground = true, name = "Light Mode")
 @Composable
 fun PreviewDaftarProdukLight() {
     JualanTheme(darkTheme = false) {
-        DaftarProdukScreen()
-    }
-}
-
-@Preview(showBackground = true, name = "Dark Mode", uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Composable
-fun PreviewDaftarProdukDark() {
-    JualanTheme(darkTheme = true) {
         DaftarProdukScreen()
     }
 }

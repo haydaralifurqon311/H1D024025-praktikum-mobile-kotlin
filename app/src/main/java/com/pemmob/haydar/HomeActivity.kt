@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -17,6 +18,7 @@ import com.pemmob.haydar.ui.screen.DaftarProdukScreen
 import com.pemmob.haydar.ui.screen.DetailProductScreen
 import com.pemmob.haydar.ui.screen.HubungiKamiScreen
 import com.pemmob.haydar.ui.theme.JualanTheme
+import com.pemmob.haydar.ui.viewmodel.ProductViewModel
 
 class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,16 +31,25 @@ class HomeActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
+                    val productViewModel: ProductViewModel = viewModel()
+
                     NavHost(navController = navController, startDestination = "daftar_produk") {
                         composable("daftar_produk") {
-                            DaftarProdukScreen(navController = navController)
+                            DaftarProdukScreen(
+                                navController = navController,
+                                viewModel = productViewModel
+                            )
                         }
                         composable(
                             route = "detail/{productId}",
                             arguments = listOf(navArgument("productId") { type = NavType.IntType })
                         ) { backStackEntry ->
                             val productId = backStackEntry.arguments?.getInt("productId") ?: 0
-                            DetailProductScreen(productId = productId, navController = navController)
+                            DetailProductScreen(
+                                productId = productId,
+                                navController = navController,
+                                viewModel = productViewModel
+                            )
                         }
                         composable("hubungi_kami") {
                             HubungiKamiScreen(navController = navController)
